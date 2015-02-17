@@ -6,17 +6,17 @@ Requirements:
     VMware Fusion 7.x Professional
     OS X 10.9.5+ (compatible with 10.10)
 
-usage: vserv.py [-h] [-l] [--add ADD] [--remove REMOVE] [--reset RESET]
-                [--get-ip GET_IP] [--monitor]
+usage: vserv.py [-h] [--list] [--monitor] [--add ADD] [--remove REMOVE]
+                [--reset RESET] [--get-ip GET_IP]
 
 optional arguments:
   -h, --help       show this help message and exit
-  -l, --list       List monitored and running VMs
-  --add ADD        Add monitoring of VM
-  --remove REMOVE  Remove monitoring of VM
-  --reset RESET    Reset monitored VM
-  --get-ip GET_IP  Get IP of monitored VM
-  --monitor        Monitor VMs
+  --list           List monitored and running VMs
+  --monitor        Service to monitor VMs
+  --add ADD        Add monitoring for /path/to/vmx
+  --remove REMOVE  Remove monitoring for /path/to/vmx
+  --reset RESET    Reset /path/to/vmx
+  --get-ip GET_IP  Get IP for /path/to/vmx
 '''
 ##############################################################################
 # Copyright 2015 Joseph Chilcote
@@ -195,6 +195,11 @@ class VMXMonitor(object):
             return ''
         return out.strip()
 
+    def vmx_is_valid(self, vmx):
+        if os.path.splitext(vmx)[-1] == '.vmx':
+            if os.path.exists(vmx):
+                return True
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--list', help='List monitored and running VMs',
@@ -219,13 +224,25 @@ def main():
             print 'Running: %s (%s)' % (k, v)
 
     elif args.add:
-        monitor.set_start(args.add)
+        if not monitor.vmx_is_valid(args.add):
+            print 'Invalid path (must be a vmx file): %s' % args.add
+            sys.exit(1)
+        if not monitor.is_scheduled(args.add):
+            monitor.set_start(args.add)
 
     elif args.remove:
-        monitor.set_stop(args.remove)
+        if not monitor.vmx_is_valid(args.remove):
+            print 'Invalid path (must be a vmx file): %s' % args.remove
+            sys.exit(1)
+        if monitor.is_scheduled(args.remove):
+            monitor.set_stop(args.remove)
 
     elif args.reset:
-        monitor.set_reset(args.reset)
+        if not monitor.vmx_is_valid(args.reset):
+            print 'Invalid path (must be a vmx file): %s' % args.reset
+            sys.exit(1)
+        if monitor.is_scheduled:
+            monitor.set_reset(args.reset)
 
     elif args.get_ip:
         print monitor.get_ip(args.get_ip)
