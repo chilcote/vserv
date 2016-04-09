@@ -1,5 +1,10 @@
 vserv
 -----
+
+###I've incorporated this into the main [vfuse
+repo](https://github.com/chilcote/vfuse) and won't be updated any further in
+this repo.
+
 Service to monitor one or more vmx path[s] and restart the vmx[s] if necessary.
 
 The idea here is to automate the spinning up or tearing down of VMware Fusion VMs. Support has been added to the [vfuse](https://github.com/chilcote/vfuse) script, allowing one to automate tests or perhaps, with some ingenuity, deploy VMs as a service.
