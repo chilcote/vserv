@@ -1,9 +1,7 @@
 vserv
 -----
 
-###I've incorporated this into the main [vfuse
-repo](https://github.com/chilcote/vfuse) and won't be updated any further in
-this repo.
+###I've incorporated this into the main [vfuse repo](https://github.com/chilcote/vfuse) and won't be updated any further in this repo.
 
 Service to monitor one or more vmx path[s] and restart the vmx[s] if necessary.
 
