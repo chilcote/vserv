@@ -53,8 +53,10 @@ class VMXMonitor(object):
                 vmrun = '/Applications/VMware Fusion.app/Contents/Library/vmrun'):
         self.plist = plist
         if not os.path.exists(self.plist):
-            plistlib.writePlist({}, plist)
-        self.d = plistlib.readPlist(plist)
+            with open(plist, 'wb') as fd:
+                plistlib.dump({}, fd)
+        with open(plist, 'rb') as fd:
+            self.d = plistlib.load(fd)
         self.vmrun = vmrun
 
     def set_start(self, vmx, job_id=None):
@@ -62,33 +64,38 @@ class VMXMonitor(object):
             if not job_id:
                 job_id = randint(1000, 9999)
             self.d[str(job_id)] = [str(vmx), 'start', '', '']
-            plistlib.writePlist(self.d, self.plist)
+            with open(self.plist, 'wb') as fd:
+                plistlib.dump(self.d, fd)
 
     def set_stop(self, vmx, job_id=None):
-        for k, v in self.d.items():
+        for k, v in list(self.d.items()):
             if v[0] == vmx:
                 self.d[k][1] = 'stop'
-        plistlib.writePlist(self.d, self.plist)
+        with open(self.plist, 'wb') as fd:
+            plistlib.dump(self.d, fd)
 
     def set_reset(self, vmx, job_id=None):
-        for k, v in self.d.items():
+        for k, v in list(self.d.items()):
             if v[0] == vmx:
                 self.d[k][1] = 'reset'
-        plistlib.writePlist(self.d, self.plist)
+        with open(self.plist, 'wb') as fd:
+            plistlib.dump(self.d, fd)
 
     def remove(self, vmx):
-        for k, v in self.d.items():
+        for k, v in list(self.d.items()):
             if v[0] == vmx:
                 del self.d[k]
-        plistlib.writePlist(self.d, self.plist)
+        with open(self.plist, 'wb') as fd:
+            plistlib.dump(self.d, fd)
 
     def set_running(self, vmx):
-        for k, v in self.d.items():
+        for k, v in list(self.d.items()):
             if v[0] == vmx:
                 self.d[k][1] = 'running'
                 self.d[k][2] = self.get_ip(vmx)
                 self.d[k][3] = str(self.get_pid(vmx))
-        plistlib.writePlist(self.d, self.plist)
+        with open(self.plist, 'wb') as fd:
+            plistlib.dump(self.d, fd)
 
     def get_pid(self, vmx):
         for root, dirs, files in os.walk('/var/run/vmware'):
@@ -111,26 +118,26 @@ class VMXMonitor(object):
                     return True
 
     def is_scheduled(self, vmx):
-        for k, v in self.d.items():
+        for k, v in list(self.d.items()):
             if v[0] == vmx:
                 if v[1] == 'start' or v[1] == 'running':
                     return True
 
     def to_be_removed(self, vmx):
-        for k, v in self.d.items():
+        for k, v in list(self.d.items()):
             if v[0] == vmx:
                 if v[1] == 'stop':
                     return True
 
     def to_be_reset(self, vmx):
-        for k, v in self.d.items():
+        for k, v in list(self.d.items()):
             if v[0] == vmx:
                 if v[1] == 'reset':
                     return True
 
     def get_scheduled(self):
         d = {}
-        for k, v in self.d.items():
+        for k, v in list(self.d.items()):
             if v[1] == 'start' or v[1] == 'running':
                 d[k] = v
         return d
@@ -139,7 +146,7 @@ class VMXMonitor(object):
         d = {}
         cmd = [self.vmrun, 'list']
         output = subprocess.check_output(cmd)
-        for line in output.splitlines():
+        for line in output.decode('utf-8').splitlines():
             if 'Total running VMs' in line:
                 if int(line.split(': ')[1]) == 0:
                     return d
@@ -148,7 +155,7 @@ class VMXMonitor(object):
         return d
 
     def start_vmx(self, vmx):
-        cmd = [self.vmrun, 'start', vmx]
+        cmd = [self.vmrun, 'start', vmx, 'nogui']
         task = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
         out, err = task.communicate()
@@ -182,16 +189,17 @@ class VMXMonitor(object):
 
     def get_ip(self, vmx):
         count = 1
-        while count <= 36:
+        while count <= 5:
             cmd = [self.vmrun, 'getGuestIPAddress', vmx]
             task = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)
             out, err = task.communicate()
             if not task.returncode == 255:
                 break
+            print("get_ip function output: " + out.decode('utf-8'))
             count += 1
             time.sleep(5)
-        if 'Error' in out:
+        if 'Error' in out.decode('utf-8'):
             return ''
         return out.strip()
 
@@ -217,66 +225,68 @@ def main():
 
     if args.list:
         if not monitor.d.keys():
-            print 'No scheduled jobs'
+            print('No scheduled jobs')
         for k, v in monitor.get_scheduled().items():
-            print 'Monitoring: %s (%s, %s, %s)' % (v[0], v[2], v[3], k)
+            print('Monitoring: %s (%s, %s, %s)' % (v[0], v[2], v[3], k))
         for k, v in monitor.get_running().items():
-            print 'Running: %s (%s)' % (k, v)
+            print('Running: %s (%s)' % (k, v))
 
     elif args.add:
         if not monitor.vmx_is_valid(args.add):
-            print 'Invalid path (must be a vmx file): %s' % args.add
+            print('Invalid path (must be a vmx file): %s' % args.add)
             sys.exit(1)
         if not monitor.is_scheduled(args.add):
             monitor.set_start(args.add)
 
     elif args.remove:
         if not monitor.vmx_is_valid(args.remove):
-            print 'Invalid path (must be a vmx file): %s' % args.remove
+            print('Invalid path (must be a vmx file): %s' % args.remove)
             sys.exit(1)
         if monitor.is_scheduled(args.remove):
             monitor.set_stop(args.remove)
 
     elif args.reset:
         if not monitor.vmx_is_valid(args.reset):
-            print 'Invalid path (must be a vmx file): %s' % args.reset
+            print('Invalid path (must be a vmx file): %s' % args.reset)
             sys.exit(1)
         if monitor.is_scheduled:
             monitor.set_reset(args.reset)
 
     elif args.get_ip:
-        print monitor.get_ip(args.get_ip)
+        print(monitor.get_ip(args.get_ip))
 
     elif args.monitor:
         while True:
             try:
                 monitor = VMXMonitor()
                 for vmx in monitor.get_monitored():
+                    print(vmx)
                     if monitor.is_scheduled(vmx):
                         if not monitor.is_running(vmx):
-                            print 'Starting: %s' % vmx
+                            print('Starting: %s' % vmx)
                             syslog.syslog(syslog.LOG_ALERT, 'Starting: %s' % vmx)
                             monitor.start_vmx(vmx)
                             monitor.set_running(vmx)
                     elif monitor.to_be_removed(vmx):
                         if monitor.is_running(vmx):
-                            print 'Stopping: %s' % vmx
+                            print('Stopping: %s' % vmx)
                             syslog.syslog(syslog.LOG_ALERT, 'Stopping: %s' % vmx)
                             monitor.stop_vmx(vmx)
                         monitor.remove(vmx)
                     elif monitor.to_be_reset(vmx):
                         if monitor.is_running(vmx):
-                            print 'Resetting: %s' % vmx
+                            print('Resetting: %s' % vmx)
                             syslog.syslog(syslog.LOG_ALERT, 'Resetting: %s' % vmx)
                             monitor.reset_vmx(vmx)
                         else:
-                            print 'Starting: %s' % vmx
+                            print('Starting: %s' % vmx)
                             syslog.syslog(syslog.LOG_ALERT, 'Starting: %s' % vmx)
                             monitor.start_vmx(vmx)
                         monitor.set_running(vmx)
+                print("Monitor sleep")
                 time.sleep(15)
             except KeyboardInterrupt:
-                print '...later!'
+                print('...later!')
                 sys.exit(1)
 
     else:
